@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "echo 'No build step needed'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3",
