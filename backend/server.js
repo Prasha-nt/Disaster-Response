@@ -19,7 +19,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: '*',
     methods: ["GET", "POST", "PUT", "DELETE"]
   }
 });
@@ -32,7 +32,7 @@ const limiter = rateLimit({
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: '*',
   credentials: true
 }));
 app.use(express.json());
