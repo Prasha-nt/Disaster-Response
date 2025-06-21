@@ -62,8 +62,9 @@ function App() {
   const [notifications, setNotifications] = useState<string[]>([]);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:5000');
+    const newSocket = io(import.meta.env.VITE_BACKEND_SOCKET_URL || 'http://localhost:5000');
     setSocket(newSocket);
+    
 
     newSocket.on('connect', () => {
       setIsConnected(true);

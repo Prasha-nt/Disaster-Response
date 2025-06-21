@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, MapPin, Tag, Loader2 } from 'lucide-react';
 import { Disaster } from '../App';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';;
 
 interface DisasterFormProps {
   onDisasterCreated: (disaster: Disaster) => void;
