@@ -1,6 +1,6 @@
 import express from 'express';
 import { supabase } from '../config/supabase.js';
-import { geocodeLocation } from '../services/geocoding.js';
+import { extractLocationFromDescription, geocodeLocation } from '../services/geocoding.js';
 import { io } from '../server.js';
 
 const router = express.Router();
@@ -9,7 +9,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const { tag } = req.query;
-    
+
     let query = supabase
       .from('disasters')
       .select('*')
@@ -36,29 +36,40 @@ router.get('/', async (req, res) => {
 // POST /api/disasters
 router.post('/', async (req, res) => {
   try {
-    const { title, location_name, description, tags, owner_id } = req.body;
+    const { title, location_name: inputLocation, description, tags, owner_id } = req.body;
 
     if (!title || !description || !owner_id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Geocode location if provided
+    let location_name = inputLocation;
     let locationData = null;
+
+    // Step 1: Extract location name using Gemini if not provided
+    if (!location_name) {
+      try {
+        location_name = await extractLocationFromDescription(description);
+      } catch (err) {
+        console.error('❌ Gemini location extraction failed:', err.message);
+      }
+    }
+
+    // Step 2: Geocode the location name if available
     if (location_name) {
       try {
         locationData = await geocodeLocation(location_name);
       } catch (geocodeError) {
-        console.error('Geocoding error:', geocodeError);
-        // Continue without coordinates
+        console.error('⚠️ Geocoding failed:', geocodeError.message);
       }
     }
 
+    // Step 3: Prepare data for insert
     const disasterData = {
       title,
-      location_name: location_name || null,
       description,
       tags: tags || [],
       owner_id,
+      location_name: location_name || null,
       audit_trail: [{
         action: 'create',
         user_id: owner_id,
@@ -66,9 +77,8 @@ router.post('/', async (req, res) => {
       }]
     };
 
-    // Add location coordinates if available
     if (locationData && locationData.lat && locationData.lng) {
-      disasterData.location = `POINT(${locationData.lng} ${locationData.lat})`;
+      disasterData.location = `SRID=4326;POINT(${locationData.lng} ${locationData.lat})`;
     }
 
     const { data, error } = await supabase
@@ -82,10 +92,9 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: 'Failed to create disaster' });
     }
 
-    // Emit real-time update
     io.emit('disaster_updated', data);
 
-    console.log(`✅ Disaster created: ${data.title} by ${owner_id}`);
+    console.log(`✅ Disaster created: ${data.title} (${location_name || 'no location'})`);
     res.status(201).json(data);
   } catch (error) {
     console.error('Server error:', error);
@@ -122,7 +131,6 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { title, location_name, description, tags, user_id } = req.body;
 
-    // Get existing disaster for audit trail
     const { data: existingDisaster } = await supabase
       .from('disasters')
       .select('audit_trail')
@@ -156,7 +164,6 @@ router.put('/:id', async (req, res) => {
       return res.status(500).json({ error: 'Failed to update disaster' });
     }
 
-    // Emit real-time update
     io.emit('disaster_updated', data);
 
     console.log(`✅ Disaster updated: ${data.title}`);
@@ -183,7 +190,6 @@ router.delete('/:id', async (req, res) => {
       return res.status(500).json({ error: 'Failed to delete disaster' });
     }
 
-    // Emit real-time update
     io.emit('disaster_updated', { id, action: 'deleted' });
 
     console.log(`✅ Disaster deleted: ${id} by ${user_id || 'system'}`);
@@ -206,9 +212,9 @@ router.post('/:id/verify-image', async (req, res) => {
 
     // Mock image verification (would use Gemini API in production)
     const verificationResult = Math.random() > 0.5 ? 'verified' : 'suspicious';
-    
+
     console.log(`🔍 Image verification for disaster ${id}: ${verificationResult}`);
-    
+
     res.json({
       verification_result: verificationResult,
       confidence: Math.random() * 100,
